@@ -12,6 +12,11 @@ from models.user import UserModel
 from blacklist import BLACKLIST
 
 _user_parser = reqparse.RequestParser()
+_user_parser.add_argument('fullname',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
 _user_parser.add_argument('username',
                           type=str,
                           required=True,
@@ -28,7 +33,7 @@ class UserRegister(Resource):
     def post(self):
         data = _user_parser.parse_args()
 
-        if UserModel.find_by_username(data['username']):
+        if UserModel.find_by_email(data['username']):
             return {"message": "A user with that username already exists"}, 400
 
         user = UserModel(**data)

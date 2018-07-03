@@ -1,20 +1,24 @@
 from flask import Flask, jsonify
 from flask_restful import Api
 from flask_jwt_extended import JWTManager
+from flask_cors import CORS
 
 from db import db
 from blacklist import BLACKLIST
 from resources.user import UserRegister, User, UserLogin, TokenRefresh, UserLogout
+import settings
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///data.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+CORS(app)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = settings.SQLALCHEMY_DATABASE_URI
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = settings.SQLALCHEMY_TRACK_MODIFICATIONS
 app.config['PROPAGATE_EXCEPTIONS'] = True
 app.config['JWT_BLACKLIST_ENABLED'] = True
 app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access', 'refresh']
-app.secret_key = 'thisisasecretkey'
+app.secret_key = settings.JWT_SECRET_KEY
 
-api = Api(app)
+api = Api(app, prefix="/api/v1")
 
 
 @app.before_first_request
