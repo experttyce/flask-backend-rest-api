@@ -2,7 +2,7 @@ from flask import Flask, jsonify
 from flask_restful import Api
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
-
+from config import log
 from db import db
 from blacklist import BLACKLIST
 from resources.user import UserRegister, User, UserLogin, TokenRefresh, UserLogout
@@ -11,12 +11,14 @@ import settings
 app = Flask(__name__)
 CORS(app)
 
+
 app.config['SQLALCHEMY_DATABASE_URI'] = settings.SQLALCHEMY_DATABASE_URI
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = settings.SQLALCHEMY_TRACK_MODIFICATIONS
 app.config['PROPAGATE_EXCEPTIONS'] = True
 app.config['JWT_BLACKLIST_ENABLED'] = True
 app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access', 'refresh']
 app.secret_key = settings.JWT_SECRET_KEY
+app.config['SERVER_NAME'] = settings.FLASK_SERVER_NAME
 
 api = Api(app, prefix="/api/v1")
 
@@ -82,11 +84,13 @@ def revoked_token_callback():
 
 
 api.add_resource(UserRegister, '/register')
-api.add_resource(User, '/user/<int:user_id>')
+api.add_resource(User, '/user/<string:user_id>')
+# api.add_resource(UserList, '/users')
 api.add_resource(UserLogin, '/login')
 api.add_resource(TokenRefresh, '/refresh')
 api.add_resource(UserLogout, '/logout')
 
 if __name__ == '__main__':
     db.init_app(app)
-    app.run(port=5000, debug=True)
+    log.info('>>>>> Starting development server at http://{}/api/v1/ <<<<<'.format(app.config['SERVER_NAME']))
+    app.run(debug=settings.FLASK_DEBUG)
