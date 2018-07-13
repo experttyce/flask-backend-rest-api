@@ -3,6 +3,17 @@ from datetime import datetime
 from sqlalchemy import func
 from werkzeug.security import generate_password_hash, check_password_hash
 import uuid
+from models.group import GroupModel
+import settings
+
+users_groups = db.Table('users_groups',
+                        db.Column('id', db.Integer, primary_key=True),
+                        db.Column('user_id', db.Integer,
+                                  db.ForeignKey('users.id', onupdate='CASCADE', ondelete='CASCADE')
+                                  ),
+                        db.Column('group_id', db.Integer,
+                                  db.ForeignKey('groups.id', onupdate='CASCADE', ondelete='CASCADE'))
+                        )
 
 
 class UserModel(db.Model):
@@ -12,23 +23,31 @@ class UserModel(db.Model):
     fullname = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(80), nullable=False, unique=True)
     password = db.Column(db.String(80), nullable=False)
+    confirmed = db.Column(db.Boolean, nullable=False, default=False)
     salt = db.Column(db.String(255))
-    created_on = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime)
+    ugroups = db.relationship('GroupModel', secondary=users_groups,
+                              backref=db.backref('groups', lazy='dynamic'))
 
-    def __init__(self, fullname, username, password):
+    def __init__(self, fullname, username, password, confirmed=False):
         self.fullname = fullname
         self.email = username
         self.salt = str(uuid.uuid4())
         self.password = password
-        self.created_on = datetime.utcnow()
+        self.created_at = datetime.utcnow()
         self.password = generate_password_hash(password)
+        self.confirmed = confirmed
+        grp = GroupModel.find_by_name(settings.USER_MEMBER_GROUP)
+        if grp:
+            self.ugroups.append(grp)
 
     def json(self):
         return {
             'id': self.id,
             'fullname': self.fullname,
             'username': self.email,
-            'created_at': self.created_on.isoformat()
+            'created_at': self.created_at.isoformat(),
+            'groups': [groups.json() for groups in self.ugroups]
         }
 
     def save_to_db(self):

@@ -5,7 +5,7 @@ from flask_cors import CORS
 from config import log
 from db import db
 from blacklist import BLACKLIST
-from resources.user import UserRegister, User, UserLogin, TokenRefresh, UserLogout
+from resources.user import UserRegister, User, UserLogin, TokenRefresh, UserLogout, init_configuration
 import settings
 
 app = Flask(__name__)
@@ -25,17 +25,17 @@ api = Api(app, prefix="/api/v1")
 
 @app.before_first_request
 def create_tables():
-    db.create_all()
+    init_configuration()
 
 
 jwt = JWTManager(app)
 
 
 @jwt.user_claims_loader
-def add_claims_to_jwt(identity):
-    if identity == 1:
-        return {'is_admin': True}
-    return {'is_admin': False}
+def add_claims_to_jwt(user):
+    # admin = (item for item in user if item["name"] == settings.USER_ADMIN_GROUP)
+    return {'roles': user}
+
 
 
 @jwt.token_in_blacklist_loader

@@ -1,4 +1,5 @@
 from flask_restful import Resource, reqparse
+from flask import request
 import datetime
 from config import log
 from flask_jwt_extended import (
@@ -7,11 +8,15 @@ from flask_jwt_extended import (
     jwt_refresh_token_required,
     get_jwt_identity,
     jwt_required,
-    get_raw_jwt
+    get_raw_jwt,
+    get_jwt_claims
 )
+from werkzeug.security import generate_password_hash
 from models.user import UserModel
+from models.group import GroupModel
 from blacklist import BLACKLIST
-
+import settings
+from db import db
 
 _user_parser = reqparse.RequestParser()
 _user_parser.add_argument('fullname',
@@ -60,6 +65,11 @@ class User(Resource):
     @classmethod
     @jwt_required
     def get(cls, user_id: int):
+        claims = get_jwt_claims()
+        roles = claims.get('roles')
+        if len(list(item for item in roles if item["name"] == settings.USER_ADMIN_GROUP)) == 0:
+            return {"message": "you don't have enough privileges to perform this operation"}, 401
+
         user = UserModel.find_by_id(user_id)
         if not user:
             return {'message': 'User Not Found'}, 404
@@ -74,6 +84,28 @@ class User(Resource):
         user.delete_from_db()
         return {'message': 'User deleted.'}, 200
 
+    @classmethod
+    @jwt_required
+    def put(cls, user_id: int):
+        user = UserModel.find_by_id(user_id)
+        if not user:
+            return {'message': 'User Not found'}, 404
+
+        data = request.json
+        # return {'data': data},200
+        if data.get('fullname'):
+            user.fullname = data.get('fullname')
+        if data.get('username'):
+            user.username = data.get('username')
+        if data.get('password'):
+            user.password = generate_password_hash(data.get('password'))
+        try:
+            user.save_to_db()
+        except Exception as e:
+            log.error(str(e))
+            return {"message": "A error was occurred"}, 400
+        return {'message': 'User was updated'}, 200
+
 
 class UserLogin(Resource):
     def post(self):
@@ -86,13 +118,15 @@ class UserLogin(Resource):
             # if user and safe_str_cmp(user.password, data['password']):
             # identity= is what the identity() function did in security.py—now stored in the JWT
             # access_token = create_access_token(identity=user.id, fresh=True)
-            access_token = create_access_token(identity=user.salt, expires_delta=datetime.timedelta(hours=23), fresh=True)
+            identity = user.json()
+            access_token = create_access_token(identity=identity.get('groups'), expires_delta=datetime.timedelta(hours=23),
+                                               fresh=True)
             refresh_token = create_refresh_token(user.id)
             return {
-                'access_token': access_token,
-                'refresh_token': refresh_token,
-                'id': user.salt
-            }, 200
+                       'access_token': access_token,
+                       'refresh_token': refresh_token,
+                       'id': user.salt
+                   }, 200
 
         return {"message": "Invalid Credentials!"}, 401
 
@@ -119,3 +153,30 @@ class TokenRefresh(Resource):
         current_user = get_jwt_identity()
         new_token = create_access_token(identity=current_user, fresh=False)
         return {'access_token': new_token}, 200
+
+
+def init_configuration():
+    db.create_all()
+
+    Group = GroupModel.find_by_name(settings.USER_ADMIN_GROUP)
+    if Group is None:
+        adm = GroupModel(settings.USER_ADMIN_GROUP, 'Group for Administrators')
+        mem = GroupModel(settings.USER_MEMBER_GROUP, 'Group for All members')
+        adm.save_to_db()
+        mem.save_to_db()
+    User = UserModel.find_by_email(settings.USER_ADMIN_EMAIL)
+
+    if User is None:
+        newUser = UserModel(settings.USER_ADMIN_FULLNAME, settings.USER_ADMIN_EMAIL, settings.USER_ADMIN_PASSWORD, True)
+        newUser.save_to_db()
+
+    User = UserModel.find_by_email(settings.USER_ADMIN_EMAIL)
+    currentgrp = User.ugroups
+    grpexists = [item.name for item in currentgrp if item.name == settings.USER_ADMIN_GROUP]
+    if len(grpexists) == 0:
+        admingrp = GroupModel.find_by_name(settings.USER_ADMIN_GROUP)
+        User.ugroups.append(admingrp)
+        User.save_to_db()
+
+
+
