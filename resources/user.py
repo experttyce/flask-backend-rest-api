@@ -18,6 +18,7 @@ from blacklist import BLACKLIST
 import settings
 from db import db
 
+
 _user_parser = reqparse.RequestParser()
 _user_parser.add_argument('fullname',
                           type=str,
@@ -54,6 +55,18 @@ class UserRegister(Resource):
             return {"message": "A error was occurred"}, 400
 
         return {"message": "User created successfully."}, 201
+
+
+class UserList(Resource):
+    @classmethod
+    @jwt_required
+    def get(cls):
+        claims = get_jwt_claims()
+        roles = claims.get('roles')
+        if len(list(item for item in roles if item["name"] == settings.USER_ADMIN_GROUP)) == 0:
+            return {"message": "you don't have enough privileges to perform this operation"}, 401
+        user = UserModel.query
+        return {'user': [x.json() for x in user]}, 200
 
 
 class User(Resource):
@@ -99,6 +112,24 @@ class User(Resource):
             user.username = data.get('username')
         if data.get('password'):
             user.password = generate_password_hash(data.get('password'))
+        claims = get_jwt_claims()
+        roles = claims.get('roles')
+        if data.get('groups') and len(list(item for item in roles if item["name"] == settings.USER_ADMIN_GROUP)) != 0:
+            reqgroups = list(map(int, data.get('groups')))
+            curgroups = list(groups.id for groups in user.ugroups)
+            newappend = list(set(reqgroups) - set(curgroups))
+            oldremove = list(set(curgroups) - set(reqgroups))
+            if newappend:
+                for gid in newappend:
+                    newgrp = GroupModel.find_by_id(gid)
+                    if newgrp:
+                        user.ugroups.append(newgrp)
+            if oldremove:
+                for gid in oldremove:
+                    oldgrp = GroupModel.find_by_id(gid)
+                    if oldgrp:
+                        user.ugroups.remove(oldgrp)
+
         try:
             user.save_to_db()
         except Exception as e:
@@ -124,8 +155,9 @@ class UserLogin(Resource):
             refresh_token = create_refresh_token(user.id)
             return {
                        'access_token': access_token,
-                       'refresh_token': refresh_token,
-                       'id': user.salt
+                       # 'refresh_token': refresh_token,
+                       'user': user.json(),
+                        'id': user.salt
                    }, 200
 
         return {"message": "Invalid Credentials!"}, 401

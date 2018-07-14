@@ -5,7 +5,7 @@ from flask_cors import CORS
 from config import log
 from db import db
 from blacklist import BLACKLIST
-from resources.user import UserRegister, User, UserLogin, TokenRefresh, UserLogout, init_configuration
+from resources.user import UserRegister, User, UserLogin, TokenRefresh, UserLogout, init_configuration, UserList
 import settings
 
 app = Flask(__name__)
@@ -30,18 +30,13 @@ def create_tables():
 
 jwt = JWTManager(app)
 
-
 @jwt.user_claims_loader
 def add_claims_to_jwt(user):
-    # admin = (item for item in user if item["name"] == settings.USER_ADMIN_GROUP)
     return {'roles': user}
-
-
 
 @jwt.token_in_blacklist_loader
 def check_if_tocken_in_blacklist(decrypted_token):
     return decrypted_token['jti'] in BLACKLIST
-
 
 @jwt.expired_token_loader
 def expired_token_callback():
@@ -85,7 +80,7 @@ def revoked_token_callback():
 
 api.add_resource(UserRegister, '/register')
 api.add_resource(User, '/user/<string:user_id>')
-# api.add_resource(UserList, '/users')
+api.add_resource(UserList, '/users')
 api.add_resource(UserLogin, '/login')
 api.add_resource(TokenRefresh, '/refresh')
 api.add_resource(UserLogout, '/logout')
