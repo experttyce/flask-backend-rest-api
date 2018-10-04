@@ -17,6 +17,7 @@ from models.group import GroupModel
 from blacklist import BLACKLIST
 import settings
 from db import db
+import sys
 
 
 _user_parser = reqparse.RequestParser()
@@ -152,10 +153,10 @@ class UserLogin(Resource):
             identity = user.json()
             access_token = create_access_token(identity=identity.get('groups'), expires_delta=datetime.timedelta(hours=23),
                                                fresh=True)
-            refresh_token = create_refresh_token(user.id)
+            refresh_token = create_refresh_token(identity=identity.get('groups'))
             return {
                        'access_token': access_token,
-                       # 'refresh_token': refresh_token,
+                       'refresh_token': refresh_token,
                        'user': user.json(),
                         'id': user.salt
                    }, 200
